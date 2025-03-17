@@ -10,17 +10,17 @@ from fpdf import FPDF
 
 # -------------------- CONFIGURATION --------------------
 # Directory to monitor for incoming files
-WATCH_DIRECTORY = '/your_input_directory/'
+WATCH_DIRECTORY = '/folder/notaryfolder'
 # Directory to save the generated PDFs (notarization output)
-PDF_OUTPUT_DIRECTORY = '/your_receipts_directory/'
+PDF_OUTPUT_DIRECTORY = '/folder/output'
 # Log file (make sure the path is absolute)
-LOG_FILE = '/your_log_directory/notaryser.log'
+LOG_FILE = '/folder/notaryser.log'
 
 # Revo CLI and notarization configuration:
-REVO_CLI = '/your_revo_cli_directory/revo-cli'  # If not in PATH, specify the full path
-CONTRACT_ADDRESS = '8dbfe93530592d739014c0c391897b9afa928974'  # Smart contract address; you can use this or one created by you
-SENDER_ADDRESS = 'YourRevoAddress'         # Sender address
-GAS_LIMIT = '25000'     # Modify according to contract requirements
+REVO_CLI = '/path_to/revo-cli'  # If not in PATH, specify the full path
+CONTRACT_ADDRESS = '8dbfe93530592d739014c0c391897b9afa928974'  # Smart contract address; you can use this or one of your own
+SENDER_ADDRESS = 'your revo address'         # Sender address
+GAS_LIMIT = '25000'     # Modify based on contract requirements
 GAS_PRICE = '0.00000001'  # Modify if necessary
 AMOUNT = '0'            # Generally 0 for notarization operations
 
@@ -109,7 +109,11 @@ def wait_for_file_stability(file_path, interval=1, retries=5):
     """
     previous_size = -1
     for _ in range(retries):
-        current_size = os.path.getsize(file_path)
+        try:
+            current_size = os.path.getsize(file_path)
+        except FileNotFoundError:
+            logger.error("File not found: %s", file_path)
+            return False
         if current_size == previous_size and current_size > 0:
             return True
         previous_size = current_size
@@ -121,7 +125,7 @@ def notarize_file(file_hash):
     Notarizes the file using the Revo CLI command.
     """
     # Create the notarization text
-    notarization_text = f"File notarized with Revonotarizer (customize this text as desired) - file hash: {file_hash}"
+    notarization_text = f"File notarized with Revonotarizer: https://github.com/Cesar0ne/revonotarizer/tree/main  - file hash: {file_hash}"
     # Convert the text to hexadecimal format (UTF-8)
     data_hex = notarization_text.encode('utf-8').hex()
     
@@ -184,6 +188,10 @@ class FileEventHandler(FileSystemEventHandler):
     def on_created(self, event):
         # Process only files (not directories)
         if not event.is_directory:
+            # Ignore temporary files (e.g., those with a .filepart extension)
+            if event.src_path.endswith('.filepart'):
+                logger.info("Ignoring temporary file: %s", event.src_path)
+                return
             logger.info("New file detected: %s", event.src_path)
             if wait_for_file_stability(event.src_path):
                 file_hash = compute_file_hash(event.src_path)
@@ -207,3 +215,4 @@ if __name__ == "__main__":
         observer.stop()
         logger.info("Shutdown requested. Stopping observer.")
     observer.join()
+
